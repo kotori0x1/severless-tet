@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Serverless Todo</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem auto; max-width: 640px; color: #222; }
+    h1 { text-align: center; }
+    .card { background: #f8f8f8; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    form { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    input[type="text"] { flex: 1; padding: 0.6rem; border: 1px solid #ccc; border-radius: 4px; }
+    button { padding: 0.6rem 1rem; border: none; border-radius: 4px; cursor: pointer; background: #2563eb; color: white; }
+    button:hover { background: #1d4ed8; }
+    ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+    li { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: white; border: 1px solid #e5e7eb; border-radius: 6px; }
+    li .title { flex: 1; }
+    li.done .title { text-decoration: line-through; color: #6b7280; }
+    .error { color: #b91c1c; margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>Serverless Todo</h1>
+  <div class="card">
+    <div id="error" class="error" role="alert"></div>
+    <form id="create-form">
+      <input id="title" type="text" placeholder="Add a new todo" required />
+      <button type="submit">Add</button>
+    </form>
+    <ul id="todo-list"></ul>
+  </div>
+
+  <script>
+    const API_BASE_URL = "https://{apiId}.execute-api.{region}.amazonaws.com";
+
+    const listEl = document.getElementById('todo-list');
+    const form = document.getElementById('create-form');
+    const titleInput = document.getElementById('title');
+    const errorEl = document.getElementById('error');
+
+    const setError = (msg = '') => { errorEl.textContent = msg; };
+
+    const fetchTodos = async () => {
+      try {
+        setError('');
+        const res = await fetch(`${API_BASE_URL}/todos`);
+        if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
+        const data = await res.json();
+        renderTodos(data.items || []);
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+
+    const renderTodos = (items) => {
+      listEl.innerHTML = '';
+      items.forEach(item => {
+        const li = document.createElement('li');
+        if (item.done) li.classList.add('done');
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = !!item.done;
+        checkbox.addEventListener('change', async () => {
+          await updateTodo(item.id, { done: checkbox.checked });
+        });
+
+        const span = document.createElement('span');
+        span.className = 'title';
+        span.textContent = item.title;
+
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Delete';
+        delBtn.style.background = '#dc2626';
+        delBtn.addEventListener('click', async () => {
+          await deleteTodo(item.id);
+        });
+
+        li.appendChild(checkbox);
+        li.appendChild(span);
+        li.appendChild(delBtn);
+        listEl.appendChild(li);
+      });
+    };
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = titleInput.value.trim();
+      if (!title) return;
+      await createTodo({ title });
+      titleInput.value = '';
+    });
+
+    const createTodo = async (payload) => {
+      try {
+        setError('');
+        const res = await fetch(`${API_BASE_URL}/todos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`Failed to create: ${res.status}`);
+        await fetchTodos();
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+
+    const updateTodo = async (id, payload) => {
+      try {
+        setError('');
+        const res = await fetch(`${API_BASE_URL}/todos/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`Failed to update: ${res.status}`);
+        await fetchTodos();
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+
+    const deleteTodo = async (id) => {
+      try {
+        setError('');
+        const res = await fetch(`${API_BASE_URL}/todos/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`Failed to delete: ${res.status}`);
+        await fetchTodos();
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+
+    fetchTodos();
+  </script>
+</body>
+</html>
