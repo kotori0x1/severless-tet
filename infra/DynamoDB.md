@@ -114,7 +114,62 @@ aws s3 cp ../frontend/index.html s3://<bucket-name>/index.html
 2. テーブル `Todos` を選択
 3. **アイテムの探索** から Todo データが入っているか確認
 
-## 8. テーブルだけ作りたい場合（手動）
+## 8. マネジメントコンソールで手動構築したい場合（IaC を使わない）
+SAM を使わず、AWS 管理コンソールの画面操作だけで構築する場合の手順です。
+
+### 8-1. DynamoDB テーブルの作成
+1. AWS 管理コンソール → **DynamoDB**
+2. **テーブルを作成**
+3. **テーブル名** に `Todos`
+4. **パーティションキー**: `pk`（タイプ: 文字列）
+5. **ソートキー**: `sk`（タイプ: 文字列）
+6. **テーブル設定**はデフォルトで OK（課金モード: オンデマンド）
+7. **テーブルを作成** をクリック
+
+### 8-2. Lambda 関数の作成
+1. AWS 管理コンソール → **Lambda**
+2. **関数の作成**
+3. **一から作成** を選択
+4. 関数名: `todo-api`
+5. ランタイム: **Node.js 20.x**
+6. **関数の作成** をクリック
+7. 作成後、**コード** タブのエディタを開き、`backend/lambda.js` の内容を貼り付けて保存
+8. **設定** → **環境変数** で `TABLE_NAME` = `Todos` を追加
+9. **設定** → **アクセス権限** → 実行ロールをクリック
+10. **ポリシーを追加** で以下の権限を付与（`Todos` テーブルに対して）
+    - `dynamodb:PutItem`
+    - `dynamodb:UpdateItem`
+    - `dynamodb:DeleteItem`
+    - `dynamodb:Query`
+
+### 8-3. API Gateway（HTTP API）の作成
+1. AWS 管理コンソール → **API Gateway**
+2. **API を作成** → **HTTP API**
+3. 統合タイプ: **Lambda**
+4. 先ほど作成した `todo-api` を選択
+5. **ルート** の設定で `ANY /{proxy+}` を追加
+6. **CORS** を有効化
+   - Allow-Origin: `*`
+   - Allow-Headers: `content-type`
+   - Allow-Methods: `GET,POST,PUT,DELETE,OPTIONS`
+7. **ステージ** を作成（例: `prod`）
+8. 作成後に表示される **API エンドポイント** を控える
+
+### 8-4. S3 静的サイトの作成
+1. AWS 管理コンソール → **S3**
+2. **バケットを作成**
+3. バケット名: 例 `todo-frontend-<任意のユニーク文字列>`
+4. **パブリックアクセスをブロック** をオフにする
+5. **バケットを作成** をクリック
+6. **プロパティ** → **静的ウェブサイトホスティング** を有効化
+   - インデックスドキュメント: `index.html`
+7. **アクセス許可** → **バケットポリシー** で公開読み取りを設定
+8. **オブジェクト** タブから `frontend/index.html` をアップロード
+
+### 8-5. フロントエンドの API URL 設定
+`frontend/index.html` の `API_BASE_URL` に **API エンドポイント** を入れてからアップロードします。
+
+## 9. テーブルだけ作りたい場合（手動）
 SAM を使わず、DynamoDB だけ先に作る場合の例です。
 ```bash
 aws dynamodb create-table \
@@ -127,7 +182,7 @@ aws dynamodb create-table \
 
 Lambda 側には環境変数 `TABLE_NAME=Todos` を渡す必要があります。
 
-## 9. 補足: DynamoDB テーブル仕様
+## 10. 補足: DynamoDB テーブル仕様
 - テーブル名: `Todos`
 - 主キーは 2 本セット
   - `pk` (Partition key): `"default"` を固定で入れる
